@@ -394,6 +394,9 @@ class VLMModelAdapter(nn.Module):
         config = getattr(vlm_model, "config", None)
         if config is None:
             return False
+        # Ling's mrope_section is not inside rope_scaling or rope_parameters.
+        if getattr(config, "model_type", None) == "bailing_moe_v3_vl":
+            return True
         if getattr(config, "model_type", None) in _HY_V4_MODEL_TYPES:
             return True
         text_config = getattr(config, "text_config", None)
