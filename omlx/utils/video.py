@@ -17,6 +17,11 @@ from PIL import Image
 
 from ..exceptions import InvalidRequestError
 
+try:
+    from mlx_vlm.models.qwen3_vl.processing_qwen3_vl import _smart_resize_image
+except ImportError:
+    _smart_resize_image = None
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_VIDEO_BYTES = 200 * 1024 * 1024
@@ -348,10 +353,7 @@ def native_video_token_count(info: VideoInfo, video_processor: Any) -> int:
     what preprocessing produces. Each temporal patch also carries a
     ``<t.t seconds>`` marker and vision start/end tokens, bounded here by 12.
     """
-    from mlx_vlm.models.qwen3_vl.processing_qwen3_vl import (
-        _smart_resize_image,
-        _smart_resize_video,
-    )
+    from mlx_vlm.models.qwen3_vl.processing_qwen3_vl import _smart_resize_video
     from mlx_vlm.utils import resolve_video_sampling
 
     sampling = resolve_video_sampling(
