@@ -237,6 +237,56 @@ def test_native_video_token_count_matches_the_processor(tmp_path, info, frames):
     assert count == vision_tokens + 12 * grid_t
 
 
+def test_ling_video_token_count_uses_processor_sampling_and_resize():
+    class BailingVideoProcessor:
+        patch_size = 16
+        temporal_patch_size = 2
+        merge_size = 2
+        min_pixels = 43008
+        max_pixels = 4718592
+        fps = 2.0
+        min_frames = 1
+        max_frames = 32
+
+        def sample_frames(self, metadata, fps, max_frames):
+            sampled = {
+                (6, 2.0): list(range(6)),
+                (50, 30.0): [0, 16, 33],
+            }[(metadata.total_num_frames, metadata.fps)]
+            assert (fps, max_frames) == (self.fps, self.max_frames)
+            return sampled
+
+    video = BailingVideoProcessor()
+    assert native_video_token_count(VideoInfo(6, 2.0, 64, 64), video) == 183
+    assert native_video_token_count(VideoInfo(50, 30.0, 192, 112), video) == 114
+
+
+@pytest.mark.parametrize(
+    "info,frames",
+    [
+        (VideoInfo(6, 2.0, 64, 64), 6),
+        (VideoInfo(50, 30.0, 192, 112), 3),
+    ],
+)
+def test_ling_video_token_count_matches_spatial_resize_and_odd_frames(info, frames):
+    module = pytest.importorskip("mlx_vlm.models.bailing_moe_v3_vl.processing_bailing")
+    video = module.BailingVideoProcessor(
+        patch_size=16,
+        temporal_patch_size=2,
+        merge_size=2,
+        min_pixels=43008,
+        max_pixels=4718592,
+        fps=2.0,
+        min_frames=1,
+        max_frames=32,
+    )
+    clip = np.zeros((frames, 3, info.height, info.width), dtype=np.uint8)
+    grid_t, grid_h, grid_w = video(videos=[clip])["video_grid_thw"][0].tolist()
+    assert native_video_token_count(info, video) == grid_t * (
+        grid_h * grid_w // video.merge_size**2 + 12
+    )
+
+
 def test_native_video_token_count_rejects_degenerate_frames():
     processor = _qwen_processor()
     attach_native_video_processor(processor)

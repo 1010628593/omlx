@@ -339,6 +339,18 @@ class TestVLMModelAdapter:
 class TestMRoPEDetection:
     """Tests for mRoPE detection and per-request position tracking."""
 
+    def test_detect_ling_composite_mrope(self):
+        from types import SimpleNamespace
+
+        from omlx.models.vlm import VLMModelAdapter
+
+        config = SimpleNamespace(
+            model_type="bailing_moe_v3_vl",
+            mrope_section=[8, 12, 12],
+            text_config=SimpleNamespace(),
+        )
+        assert VLMModelAdapter._detect_mrope(SimpleNamespace(config=config))
+
     def test_detect_mrope_via_rope_scaling(self):
         """Detect mRoPE via text_config.rope_scaling.mrope_section (Qwen3-VL)."""
         from omlx.models.vlm import VLMModelAdapter

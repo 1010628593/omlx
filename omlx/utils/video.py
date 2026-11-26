@@ -348,12 +348,44 @@ def native_video_token_count(info: VideoInfo, video_processor: Any) -> int:
     what preprocessing produces. Each temporal patch also carries a
     ``<t.t seconds>`` marker and vision start/end tokens, bounded here by 12.
     """
-    from mlx_vlm.models.qwen3_vl.processing_qwen3_vl import _smart_resize_video
+    from mlx_vlm.models.qwen3_vl.processing_qwen3_vl import (
+        _smart_resize_image,
+        _smart_resize_video,
+    )
     from mlx_vlm.utils import resolve_video_sampling
 
     sampling = resolve_video_sampling(
         SimpleNamespace(video_processor=video_processor), {}
     )
+    if type(video_processor).__name__ == "BailingVideoProcessor":
+        # Ling budgets pixels per temporal group and can sample an odd frame count.
+        metadata = SimpleNamespace(
+            total_num_frames=info.frame_count, fps=info.fps or 1.0
+        )
+        frames = len(
+            video_processor.sample_frames(metadata, sampling.fps, sampling.max_frames)
+        )
+        temporal = video_processor.temporal_patch_size
+        factor = video_processor.patch_size * video_processor.merge_size
+        max_pixels = max(
+            video_processor.max_pixels * temporal / frames,
+            int(video_processor.min_pixels * 1.05),
+        )
+        try:
+            height, width = _smart_resize_image(
+                info.height,
+                info.width,
+                factor,
+                video_processor.min_pixels,
+                max_pixels,
+            )
+        except ValueError as exc:
+            raise InvalidRequestError(
+                f"Unsupported video dimensions: {exc}", field="messages"
+            ) from exc
+        return math.ceil(frames / temporal) * (
+            (height // factor) * (width // factor) + 12
+        )
     step = sampling.frame_factor
     low = math.ceil(sampling.min_frames / step) * step
     high = math.floor(min(sampling.max_frames, info.frame_count) / step) * step

@@ -156,13 +156,17 @@ class FakeStreamingCore:
 
 @pytest.mark.skipif(not HAS_MLX, reason="mlx is required to import the VLM engine")
 def test_video_processor_patch_keeps_a_real_video_processor(monkeypatch):
-    """mlx-vlm's Qwen3-Omni processor passes its video processor positionally."""
+    """Qwen3-Omni and Ling pass their video processor positionally."""
     vlm_module._patch_video_processor_bug()
     monkeypatch.setattr(
         ProcessorMixin, "check_argument_for_proper_class", lambda self, name, arg: None
     )
 
     class Qwen3OmniMoeProcessor(ProcessorMixin):
+        def __init__(self, image_processor=None, video_processor=None, tokenizer=None):
+            super().__init__(image_processor, video_processor, tokenizer)
+
+    class BailingProcessor(ProcessorMixin):
         def __init__(self, image_processor=None, video_processor=None, tokenizer=None):
             super().__init__(image_processor, video_processor, tokenizer)
 
@@ -173,6 +177,8 @@ def test_video_processor_patch_keeps_a_real_video_processor(monkeypatch):
     image, video, tokenizer = object(), object(), object()
     kept = Qwen3OmniMoeProcessor(image, video, tokenizer)
     assert kept.video_processor is video and kept.tokenizer is tokenizer
+    ling = BailingProcessor(image, video, tokenizer)
+    assert ling.video_processor is video and ling.tokenizer is tokenizer
     # Other processors keep dropping theirs, as before Qwen3-Omni needed one.
     dropped = OtherProcessor(image, tokenizer, video_processor=video)
     assert dropped.tokenizer is tokenizer

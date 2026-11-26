@@ -415,8 +415,8 @@ def _patch_video_processor_bug():
        own ProcessorMixin.__init__ rejects unexpected kwargs, so it is
        patched to silently drop ``video_processor``.
 
-    mlx-vlm's Qwen3-Omni processor needs its video processor: the modality
-    entry is restored while that processor initializes, because
+    mlx-vlm's Qwen3-Omni and Ling processors need their video processors: the
+    modality entry is restored while that processor initializes, because
     ProcessorMixin derives its attribute list from the mapping. Other
     processors still drop it.
     """
@@ -449,7 +449,10 @@ def _patch_video_processor_bug():
             if video is None and "video_processor" in params:
                 index = params.index("video_processor")
                 video = args[index] if index < len(args) else None
-            keeps_video = type(self).__name__ == "Qwen3OmniMoeProcessor"
+            keeps_video = type(self).__name__ in {
+                "Qwen3OmniMoeProcessor",
+                "BailingProcessor",
+            }
             if keeps_video and video is not None and video_entry is not None:
                 mapping["video_processor"] = video_entry
                 try:
@@ -2138,7 +2141,11 @@ class VLMBatchedEngine(BaseEngine):
         if restored:
             logger.info("Rebound %d mlx-vlm 1-bit modules to stock MLX", restored)
 
-        if self.model_type in NATIVE_VIDEO_MODEL_TYPES:
+        if self.model_type == "bailing_moe_v3_vl":
+            self._native_video = (
+                getattr(self._processor, "video_processor", None) is not None
+            )
+        elif self.model_type in NATIVE_VIDEO_MODEL_TYPES:
             self._native_video = attach_native_video_processor(
                 self._processor, self._model_name
             )
